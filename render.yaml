@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: scex-cpdp
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 1 --timeout 300
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: MAX_ROWS_PER_FILE
+        value: 10000
+      - key: MAX_FEATURES
+        value: 30
+      - key: MAX_CONTENT_LENGTH_MB
+        value: 30
+      - key: SECRET_KEY
+        generateValue: true

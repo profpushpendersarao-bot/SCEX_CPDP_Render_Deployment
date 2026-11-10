@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCEX-CPDP | Cross-Project Defect Prediction</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root { --ink:#182230; --muted:#64748b; --line:#e5eaf1; --bg:#f5f7fb; --blue:#315efb; --navy:#13233b; --green:#087f5b; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"DM Sans",sans-serif; background:var(--bg); color:var(--ink); }
+    header { background:linear-gradient(120deg,#101f36,#203f69); color:white; padding:42px 20px 54px; }
+    .wrap { max-width:1120px; margin:0 auto; }
+    .eyebrow { color:#a9c4ff; font-weight:700; letter-spacing:.12em; font-size:12px; text-transform:uppercase; }
+    h1 { font:800 clamp(30px,5vw,48px)/1.08 Manrope,sans-serif; margin:13px 0; max-width:780px; }
+    header p { color:#d6e2f3; max-width:760px; line-height:1.65; margin:0; }
+    main { max-width:1120px; margin:-24px auto 60px; padding:0 18px; }
+    .card { background:white; border:1px solid var(--line); border-radius:18px; padding:24px; margin-bottom:18px; box-shadow:0 10px 30px rgba(20,38,68,.05); }
+    h2 { font:700 21px Manrope,sans-serif; margin:0 0 8px; }
+    .muted { color:var(--muted); line-height:1.55; }
+    .upload { border:1.5px dashed #b8c7dc; border-radius:14px; background:#f8faff; padding:24px; margin:18px 0; }
+    input[type=file] { width:100%; padding:12px; background:white; border:1px solid var(--line); border-radius:10px; }
+    button,.download { display:inline-block; border:0; background:var(--blue); color:white; font-weight:700; padding:12px 18px; border-radius:10px; text-decoration:none; cursor:pointer; }
+    button:hover,.download:hover { background:#2349d4; }
+    .alert { padding:13px 15px; border-radius:10px; margin:12px 0; background:#fff1f0; color:#9c2c20; border:1px solid #ffd7d2; }
+    .pill { display:inline-block; padding:6px 10px; background:#edf3ff; color:#294fc6; border-radius:999px; font-size:12px; font-weight:700; margin:4px 5px 4px 0; }
+    .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:16px; }
+    .stat { background:#f7f9fc; border:1px solid var(--line); border-radius:12px; padding:14px; }
+    .stat b { display:block; font:700 23px Manrope,sans-serif; }
+    .stat span { color:var(--muted); font-size:12px; }
+    .table-wrap { overflow-x:auto; margin-top:14px; }
+    table { width:100%; border-collapse:collapse; font-size:13px; white-space:nowrap; }
+    th,td { padding:11px 12px; border-bottom:1px solid var(--line); text-align:left; }
+    th { color:#526174; background:#f7f9fc; font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+    tr:last-child td { border-bottom:0; }
+    .actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:14px; }
+    .secondary { background:#edf2ff; color:#284bb5; }
+    .note { font-size:13px; color:#64748b; line-height:1.6; }
+    footer { text-align:center; color:#8290a2; padding:22px; font-size:12px; }
+    @media(max-width:600px) { .card { padding:18px; } header { padding-top:32px; } }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="eyebrow">Research prototype · Software quality analytics</div>
+    <h1>SCEX-CPDP</h1>
+    <p>Stability-aware, cost-sensitive and explainable cross-project defect prediction. Upload PROMISE/Jureczko-style project CSV files and evaluate models using leave-one-project-out validation.</p>
+  </div>
+</header>
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <section class="card">
+    <h2>Run a cross-project experiment</h2>
+    <p class="muted">Upload at least two CSV files from distinct projects. Each CSV must contain a defect-count target such as <code>bug</code>, <code>bugs</code>, <code>defect</code> or <code>number_of_bugs</code>. The app uses common numeric feature names across projects.</p>
+    <form action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+      <div class="upload">
+        <label for="datasets"><b>Select project CSV files</b></label>
+        <p class="note">Only CSV files are accepted. The current upload limit is {{ max_upload_mb }} MB per request.</p>
+        <input id="datasets" name="datasets" type="file" accept=".csv,text/csv" multiple required>
+      </div>
+      <button type="submit">Run LOPO analysis</button>
+    </form>
+    <div class="stats">
+      <div class="stat"><b>{{ max_rows }}</b><span>Maximum rows loaded per file</span></div>
+      <div class="stat"><b>{{ max_features }}</b><span>Maximum numeric features</span></div>
+      <div class="stat"><b>1</b><span>CPU worker per model</span></div>
+    </div>
+    <p class="note">Memory-aware defaults: one-file-at-a-time loading, numeric columns only, float32 features, bounded row/feature counts, and single-worker tree models. Render instances have limited RAM; use a small number of files for initial tests.</p>
+  </section>
+
+  {% if summary %}
+  <section class="card">
+    <h2>Experiment completed</h2>
+    <p class="muted">Leave-one-project-out (LOPO) evaluation. Each project is held out once; the remaining projects form the training data.</p>
+    <div class="stats">
+      <div class="stat"><b>{{ projects|length }}</b><span>Distinct projects</span></div>
+      <div class="stat"><b>{{ features|length }}</b><span>Common numeric features</span></div>
+      <div class="stat"><b>{{ results|length }}</b><span>Project-model evaluations</span></div>
+    </div>
+    <h3>Macro-average model summary</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>MCC</th><th>Bal. accuracy</th><th>ROC-AUC</th><th>PR-AUC</th></tr></thead>
+      <tbody>{% for row in summary %}
+        <tr><td><b>{{ row.model }}</b></td>
+          {% for key in ['accuracy','precision','recall','f1','mcc','balanced_accuracy','roc_auc','pr_auc'] %}
+            <td>{{ '—' if row[key] is none else '%.3f'|format(row[key]) }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <h3>Per-project results</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Held-out project</th><th>Model</th><th>Train N</th><th>Test N</th><th>F1</th><th>MCC</th><th>Recall</th><th>PR-AUC</th></tr></thead>
+      <tbody>{% for row in results %}
+        <tr><td>{{ row.held_out_project }}</td><td>{{ row.model }}</td><td>{{ row.n_train }}</td><td>{{ row.n_test }}</td>
+          <td>{{ '%.3f'|format(row.f1) }}</td><td>{{ '%.3f'|format(row.mcc) }}</td><td>{{ '%.3f'|format(row.recall) }}</td>
+          <td>{{ '—' if row.pr_auc is none else '%.3f'|format(row.pr_auc) }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <h3>Uploaded datasets</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>File</th><th>Inferred project</th><th>Rows</th><th>Target</th><th>Defect rate</th></tr></thead>
+      <tbody>{% for row in files %}
+        <tr><td>{{ row.file }}</td><td>{{ row.project }}</td><td>{{ row.rows_loaded }}</td><td>{{ row.target_column }}</td><td>{{ '%.3f'|format(row.defect_rate) }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <div><p><b>Projects:</b><br>{% for p in projects %}<span class="pill">{{ p }}</span>{% endfor %}</p>
+      <p><b>Common features:</b><br>{% for f in features %}<span class="pill">{{ f }}</span>{% endfor %}</p>
+    </div>
+    <div class="actions">
+      <a class="download" href="{{ url_for('download', download_id=download_id, filename='lopo_per_project_results.csv') }}">Download per-project CSV</a>
+      <a class="download secondary" href="{{ url_for('download', download_id=download_id, filename='model_macro_summary.csv') }}">Download summary CSV</a>
+      <a class="download secondary" href="{{ url_for('download', download_id=download_id, filename='experiment_metadata.json') }}">Download metadata</a>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Method and interpretation notes</h2>
+    <ul class="note">
+      <li>Defective is currently defined as defect count greater than zero. Confirm this matches the target semantics in each uploaded dataset.</li>
+      <li>The Random Forest uses balanced class weights as a cost-sensitive baseline; it is not a fully specified economic cost model.</li>
+      <li>Feature intersection uses exact column-name matches. Different schemas require a documented feature-harmonization step.</li>
+      <li>Filename-based project detection is a convenience only. Check the inferred project labels shown in the results.</li>
+      <li>Use results as exploratory until you have audited data selection, duplicates, project mapping, and validation design.</li>
+      <li>Render's local filesystem may be ephemeral. Download your results after each run.</li>
+    </ul>
+  </section>
+</main>
+<footer>SCEX-CPDP research prototype · Flask + scikit-learn</footer>
+</body>
+</html>
